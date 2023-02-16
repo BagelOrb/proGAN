@@ -217,10 +217,10 @@ def main():
     tensorboard_step = 0
     # start at step that corresponds to img size that we set in config
     n_blocks = int(log2(config.START_TRAIN_AT_IMG_SIZE / 4))
-    img_size = 4 * 2 ** n_blocks
     for n_epochs in config.PROGRESSIVE_EPOCHS[n_blocks:]:
+        img_size = 4 * 2 ** n_blocks
         alpha = 1e-5  # start with very low alpha
-        loader, dataset = get_loader(4 * 2 ** n_blocks, config.DATASET)  # 4->0, 8->1, 16->2, 32->3, 64 -> 4
+        loader, dataset = get_loader(img_size, config.DATASET)  # 4->0, 8->1, 16->2, 32->3, 64 -> 4
         val_loader, val_dataset = get_loader(img_size,
                                              config.VALIDATION_DATASET)  # 4->0, 8->1, 16->2, 32->3, 64 -> 4
         print(f"Current image size: {img_size}")
