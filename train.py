@@ -114,8 +114,8 @@ def train_fn(
                 fixed_fakes = gen(config.FIXED_NOISE, alpha, step) * 0.5 + 0.5
             # TODO: add batch accuracy
             # TODO: add validation accuracy
-            batch_accuracies = []
-            print("Evaluating accuracy...")
+            batch_accuracies_real = []
+            batch_accuracies_fake = []
             for (val_real, _) in val_loader:
                 cur_val_batch_size = val_real.shape[0]
                 noise = torch.randn(cur_val_batch_size, config.Z_DIM, 1, 1).to(config.DEVICE)
@@ -124,18 +124,17 @@ def train_fn(
                     fake = gen(noise, alpha, step)
                     critic_real = critic(real, alpha, step)
                     critic_fake = critic(fake.detach(), alpha, step)
-                    batch_accuracies.append((
-                                                    ((critic_real > .5).type(torch.float)).mean()
-                                                    + ((critic_fake < .5).type(torch.float)).mean()
-                                            ) / 2)  # / 2 because we add mean correct real and mean correct fake
-            accuracy = torch.Tensor(batch_accuracies).mean()
-            print("...done")
+                    batch_accuracies_real.append(((critic_real > 0).type(torch.float)).mean())
+                    batch_accuracies_fake.append(((critic_fake < 0).type(torch.float)).mean())
 
+            accuracy_real = torch.Tensor(batch_accuracies_real).mean()
+            accuracy_fake = torch.Tensor(batch_accuracies_fake).mean()
             plot_to_tensorboard(
                 writer,
                 loss_critic.item(),
                 loss_gen.item(),
-                accuracy,
+                accuracy_real,
+                accuracy_fake,
                 alpha,
                 real.detach(),
                 fixed_fakes.detach(),
