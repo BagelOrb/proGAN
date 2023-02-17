@@ -10,8 +10,9 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 SAVE_MODEL = True
 LOAD_MODEL = True
 LEARNING_RATE = 1e-3
-#BATCH_SIZES = [32, 32, 32, 16, 16, 16, 16, 8, 4]  # change depending on vram
-BATCH_SIZES = [64, 64, 64, 64, 32, 32, 32, 16, 8]  # change depending on vram
+# BATCH_SIZES = [32, 32, 32, 16, 16, 16, 16, 8, 4]  # change depending on vram
+BATCH_SIZES = [64, 64, 64, 64, 32, 16, 8, 4]  # change depending on vram
+# image sizes  4   8   16  32  64 128 256 512 1024
 CHANNELS_IMG = 3
 Z_DIM = 256  # should be 512 in original paper
 IN_CHANNELS = 256  # should be 512 in original paper
@@ -19,6 +20,7 @@ CRITIC_ITERATIONS = 1
 LAMBDA_GP = 10
 
 # in paper they did 800k img per epoch; TODO: we're doing 30 ?!
-PROGRESSIVE_EPOCHS = [30] * len(BATCH_SIZES)
+PROGRESSIVE_EPOCHS = [1, 2, 4, 8, 10, 10, 20, 30]
+# image sizes         4  8 16 32  64 128 256 512 1024
 FIXED_NOISE = torch.randn(8, Z_DIM, 1, 1).to(DEVICE)
 NUM_WORKERS = 8
