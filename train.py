@@ -226,6 +226,10 @@ def main():
 
         for epoch in range(n_epochs):
             print(f"Epoch [{epoch + 1}/{n_epochs}]")
+            if config.SAVE_MODEL:
+                save_checkpoint(gen, opt_gen, img_size, filename_prefix=config.CHECKPOINT_GEN)
+                save_checkpoint(critic, opt_critic, img_size, filename_prefix=config.CHECKPOINT_CRITIC)
+
             tensorboard_step, alpha = train_fn(
                 critic,
                 gen,
@@ -243,9 +247,9 @@ def main():
                 scaler_critic,
             )
 
-            if config.SAVE_MODEL:
-                save_checkpoint(gen, opt_gen, img_size, filename_prefix=config.CHECKPOINT_GEN)
-                save_checkpoint(critic, opt_critic, img_size, filename_prefix=config.CHECKPOINT_CRITIC)
+        if config.SAVE_MODEL:
+            save_checkpoint(gen, opt_gen, img_size, filename_prefix=config.CHECKPOINT_GEN)
+            save_checkpoint(critic, opt_critic, img_size, filename_prefix=config.CHECKPOINT_CRITIC)
 
         n_blocks += 1  # progress to the next img size
 
