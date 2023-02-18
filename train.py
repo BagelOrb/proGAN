@@ -202,22 +202,23 @@ def main():
                 save_checkpoint(gen, opt_gen, img_size, filename_prefix=config.CHECKPOINT_GEN)
                 save_checkpoint(critic, opt_critic, img_size, filename_prefix=config.CHECKPOINT_CRITIC)
 
-            tensorboard_step, alpha = train_fn(
-                critic,
-                gen,
-                loader,
-                dataset,
-                val_loader,
-                val_dataset,
-                n_blocks,
-                alpha,
-                opt_critic,
-                opt_gen,
-                tensorboard_step,
-                writer,
-                scaler_gen,
-                scaler_critic,
-            )
+            tensorboard_step, alpha = \
+                train_fn(
+                    critic,
+                    gen,
+                    loader,
+                    dataset,
+                    val_loader,
+                    val_dataset,
+                    n_blocks,
+                    alpha,
+                    opt_critic,
+                    opt_gen,
+                    tensorboard_step,
+                    writer,
+                    scaler_gen,
+                    scaler_critic,
+                )
 
         if config.SAVE_MODEL:
             save_checkpoint(gen, opt_gen, img_size, filename_prefix=config.CHECKPOINT_GEN)
