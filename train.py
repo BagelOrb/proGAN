@@ -108,8 +108,6 @@ def train_fn(
         if batch_idx % 240 == 0:
             with torch.no_grad():
                 fixed_fakes = gen(config.FIXED_NOISE, alpha, step) * 0.5 + 0.5
-            # TODO: add batch accuracy
-            # TODO: add validation accuracy
             batch_accuracies_real = []
             batch_accuracies_fake = []
             for (val_real, _) in val_loader:
@@ -118,6 +116,7 @@ def train_fn(
                 # with torch.cuda.amp.autocast(): # TODO idk if this should be commented out or not
                 with torch.no_grad():
                     fake = gen(noise, alpha, step)
+
                     critic_real = critic(real, alpha, step)
                     critic_fake = critic(fake.detach(), alpha, step)
                     batch_accuracies_real.append(((critic_real > 0).type(torch.float)).mean())
