@@ -1,7 +1,4 @@
 """ Training of ProGAN using WGAN-GP loss"""
-import time
-
-import GPUtil
 import torch
 import torch.optim as optim
 import torchvision.datasets as datasets
@@ -14,12 +11,11 @@ from utils import (
     save_checkpoint,
     load_checkpoint,
     generate_examples,
+    cooldown,
 )
 from model import Discriminator, Generator
 from math import log2
 from tqdm import tqdm
-
-import psutil
 
 import config
 
@@ -143,38 +139,14 @@ def train_fn(
             tensorboard_step += 1
 
         # ensure safe temperatures
-        safety_factor = .95
-        cooling_factor = .80
-        max_gpu_temp = 93
-        safe = True
-        cooling_causes = []
-        for temp_sensor in psutil.sensors_temperatures()['coretemp']:
-            if temp_sensor.current > safety_factor * temp_sensor.high:
-                safe = False
-                cooling_causes.append(temp_sensor.label)
-        for gpu in GPUtil.getGPUs():
-            if gpu.temperature > safety_factor * max_gpu_temp:
-                safe = False
-                cooling_causes.append('GPU')
-        # Cool to 80% of safe temperatures
-        if not safe:
-            time_before_cooling = time.time()
-            while not safe:
-                safe = True
-                for temp_sensor in psutil.sensors_temperatures()['coretemp']:
-                    if temp_sensor.current > cooling_factor * temp_sensor.high:
-                        safe = False
-                for gpu in GPUtil.getGPUs():
-                    if gpu.temperature > cooling_factor * max_gpu_temp:
-                        safe = False
-                time.sleep(.1)
-            time_cooled += time.time() - time_before_cooling
-            # print(f"Cooled for {time.time() - time_before_cooling: .1f} seconds because of {cooling_causes}.")
+        time_cooled += cooldown()
+        # print(f"Cooled for {time.time() - time_before_cooling: .1f} seconds because of {cooling_causes}.")
 
         loop.set_postfix(
             gp=gp.item(),
             loss_critic=loss_critic.item(),
         )
+
 
     print(f"Cooled for {time_cooled: .1f} seconds.")
     return tensorboard_step, alpha

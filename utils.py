@@ -8,6 +8,9 @@ import config
 from torchvision.utils import save_image
 from scipy.stats import truncnorm
 
+import psutil  # for CPU temp
+import GPUtil  # for temp of graphics card
+import time
 
 # Print losses occasionally and print to tensorboard
 def plot_to_tensorboard(
@@ -25,6 +28,36 @@ def plot_to_tensorboard(
         img_grid_fake = torchvision.utils.make_grid(fake[:8], normalize=True)
         writer.add_image("Real", img_grid_real, global_step=tensorboard_step)
         writer.add_image("Fake", img_grid_fake, global_step=tensorboard_step)
+
+
+def cooldown():
+    safety_factor = .95
+    cooling_factor = .80
+    max_gpu_temp = 93
+    safe = True
+    cooling_causes = []
+    for temp_sensor in psutil.sensors_temperatures()['coretemp']:
+        if temp_sensor.current > safety_factor * temp_sensor.high:
+            safe = False
+            cooling_causes.append(temp_sensor.label)
+    for gpu in GPUtil.getGPUs():
+        if gpu.temperature > safety_factor * max_gpu_temp:
+            safe = False
+            cooling_causes.append('GPU')
+    # Cool to 80% of safe temperatures
+    if not safe:
+        time_before_cooling = time.time()
+        while not safe:
+            safe = True
+            for temp_sensor in psutil.sensors_temperatures()['coretemp']:
+                if temp_sensor.current > cooling_factor * temp_sensor.high:
+                    safe = False
+            for gpu in GPUtil.getGPUs():
+                if gpu.temperature > cooling_factor * max_gpu_temp:
+                    safe = False
+            time.sleep(.1)
+        return time.time() - time_before_cooling
+    return 0
 
 
 def gradient_penalty(critic, real, fake, alpha, train_step, device="cpu"):
