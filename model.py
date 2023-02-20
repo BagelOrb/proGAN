@@ -1,12 +1,101 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
+import numpy as np
 from math import log2
+
 #          4  8 16 32  64     128    256    512     1024
 factors = [1, 1, 1, 1, 1 / 2, 1 / 4, 1 / 8, 1 / 16, 1 / 32]
 
 
-class WSConv2d(nn.Module):
+class SOMConv2d(nn.Module):
+    """Convolution layer which splits and distributes channels
+    """
+
+    def __init__(self, n_in_channels, n_out_channels, som_kernel_size=None, kernel_size=3, stride=1, padding=1, gain=2,
+                 dilation=(1, 1)):
+        super(SOMConv2d, self).__init__()
+
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.dilation = dilation
+
+        self.scale = (gain / (n_in_channels * kernel_size * kernel_size)) ** 0.5
+
+        self.collapsed_case = False
+        if n_out_channels < 16 or n_in_channels < 16:
+            self.collapsed_case = True
+            self.conv = nn.Conv2d(n_in_channels, n_out_channels, kernel_size, stride, padding)
+            return
+
+        if False:
+            self.som_size = 2 ** math.floor(
+                math.log2(math.floor(math.sqrt(n_in_channels))))  # the shorter side of the grid
+            # TODO: maybe use square grid of size other than powers of 2?
+
+            if som_kernel_size is None:
+                som_kernel_size = int(self.som_size * 4 / 5)
+                if som_kernel_size >= self.som_size: som_kernel_size = self.som_size - 1  # at least try to reduce kernel
+                if som_kernel_size < 2: som_kernel_size = 2  # Never only use a single channel
+
+        self.som_size = 4  # TODO: check implementation that input channels are always divided into a 4x4 SOM
+        som_kernel_size = 3
+
+        self.som_y_stride = 2 ** math.floor(math.log2(math.floor(n_in_channels / self.som_size / self.som_size)))
+
+        total_som_size = int(n_out_channels / self.som_y_stride)
+
+        self.conv_layers = nn.ModuleList()
+        for i in range(total_som_size):
+            self.conv_layers.append(
+                nn.Conv2d(som_kernel_size ** 2 * self.som_y_stride, self.som_y_stride, kernel_size=kernel_size, stride=stride,
+                          padding=padding,
+                          dilation=dilation))
+            # initialize conv layer
+            nn.init.normal_(self.conv_layers[-1].weight)
+            nn.init.zeros_(self.conv_layers[-1].bias)
+
+        self.in_channel_indices_all = []
+
+        for c in range(total_som_size):
+            som_c = int(c / total_som_size * n_in_channels)
+            som_x = som_c % self.som_size
+            som_y = math.floor(som_c / self.som_size)
+            if False and n_out_channels == n_in_channels / 2:  # TODO
+                if som_y % 2 == 1:
+                    som_x += 1
+
+            in_channel_indices = []
+            for (x_offset, y_offset) in np.ndindex(som_kernel_size, som_kernel_size):
+                x = (som_x + x_offset) % self.som_size
+                y = (som_y + y_offset) % int(total_som_size / self.som_size)  # TODO: just make som_size_x and som_size_y
+                idx = y * self.som_size + x
+                assert (0 <= idx < total_som_size)
+                in_channel_indices += range(idx * self.som_y_stride, (idx + 1) * self.som_y_stride)
+
+            self.in_channel_indices_all.append(in_channel_indices)
+
+    def forward(self, x):
+        if self.collapsed_case:
+            return self.conv(x * self.scale)
+
+        out_shape = (  # from https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html
+            x.shape[0], len(self.conv_layers) * self.som_y_stride,
+            int(math.floor(
+                (x.shape[2] + 2 * self.padding - self.dilation[0] * (self.kernel_size - 1)) / self.stride)),
+            int(math.floor(
+                (x.shape[3] + 2 * self.padding - self.dilation[1] * (self.kernel_size - 1)) / self.stride))
+        )
+        out = torch.zeros(out_shape, dtype=x.dtype, device=x.device)
+        for i, conv in enumerate(self.conv_layers):
+            out[:, i * self.som_y_stride:(i + 1) * self.som_y_stride, :, :] = conv(
+                x[:, self.in_channel_indices_all[i], :, :] * self.scale)
+        return out
+
+
+class WSConv2d_old(nn.Module):
     """Weight scaled convolution
     """
 
@@ -23,6 +112,12 @@ class WSConv2d(nn.Module):
 
     def forward(self, x):
         return self.conv(x * self.scale) + self.bias.view(1, self.bias.shape[0], 1, 1)
+
+
+WSConv2d = SOMConv2d
+
+
+# WSConv2d = WSConv2d_old
 
 
 class PixelNorm(nn.Module):
