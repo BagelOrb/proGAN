@@ -220,7 +220,7 @@ class Discriminator(nn.Module):
         self.initial_from_rgb = WSConv2d(img_channels, in_channels, kernel_size=1, padding=0)
         self.from_rgb_layers.append(self.initial_from_rgb)
         self.final_block = nn.Sequential(
-            WSConv2d(in_channels, in_channels, kernel_size=3, padding=1),  # TODO add back the stdev channel
+            WSConv2d(in_channels + 1, in_channels, kernel_size=3, padding=1),
             nn.LeakyReLU(0.2),
             WSConv2d(in_channels, in_channels, kernel_size=4, padding=0),
             # 0 padding so that output size is 1x1 img
@@ -243,7 +243,7 @@ class Discriminator(nn.Module):
         out = self.leaky(self.from_rgb_layers[starting_block_i](x))
 
         if n_blocks == 0:
-            # out = self.minibatch_std(out)
+            out = self.minibatch_std(out)
             return self.final_block(out).view(out.shape[0], -1)
 
         downscaled = self.leaky(self.from_rgb_layers[starting_block_i + 1](self.avg_pool(x)))
@@ -255,7 +255,7 @@ class Discriminator(nn.Module):
             out = self.prog_blocks[i_block](out)
             out = self.avg_pool(out)
 
-        # out = self.minibatch_std(out) # TODO: add back std dev channel
+        out = self.minibatch_std(out)
         return self.final_block(out).view(out.shape[0], -1)
 
 
