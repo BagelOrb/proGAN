@@ -28,6 +28,8 @@ class SOMConv2d(nn.Module):
         if n_out_channels < 16 or n_in_channels < 16:
             self.collapsed_case = True
             self.conv = nn.Conv2d(n_in_channels, n_out_channels, kernel_size, stride, padding)
+            nn.init.normal_(self.conv.weight)
+            nn.init.zeros_(self.conv.bias)
             return
 
         if False:
