@@ -29,7 +29,8 @@ class SOMConv2d(nn.Module):
         self.collapsed_case = False
         if n_out_channels < 16 or n_in_channels < 16 \
                 or n_out_channels % (som_size ** 2) != 0 \
-                or n_in_channels % (som_size ** 2) != 0:
+                or n_in_channels % (som_size ** 2) != 0 \
+                or kernel_size < 2:
             # TODO: deal with odd numbers of layers, such as the final layer with minibatch std dev!
             self.collapsed_case = True
             self.conv = nn.Conv2d(n_in_channels, n_out_channels, kernel_size, stride, padding)
