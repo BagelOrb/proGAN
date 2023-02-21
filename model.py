@@ -124,11 +124,6 @@ class WSConv2d_old(nn.Module):
         return self.conv(x * self.scale) + self.bias.view(1, self.bias.shape[0], 1, 1)
 
 
-WSConv2d = SOMConv2d
-
-
-# WSConv2d = WSConv2d_old
-
 
 class PixelNorm(nn.Module):
     def __init__(self):
@@ -263,6 +258,9 @@ class Discriminator(nn.Module):
         return self.final_block(out).view(out.shape[0], -1)
 
 
+WSConv2d = SOMConv2d
+# WSConv2d = WSConv2d_old
+
 if __name__ == "__main__":
     Z_DIM = 50
     IN_CHANNELS = 256
@@ -282,6 +280,6 @@ if __name__ == "__main__":
         z = gen(x, .5, n_blocks=num_blocks)
         print(f"Used memory: {torch.cuda.memory_allocated() / (1024**2):.1f}MB")
         assert z.shape == (1, 3, img_size, img_size)
-        out = critic(z, alpha=.5, n_blocks=num_blocks)
-        assert out.shape == (1, 1)
+        final_out = critic(z, alpha=.5, n_blocks=num_blocks)
+        assert final_out.shape == (1, 1)
         print(f"succes at img size {img_size}")

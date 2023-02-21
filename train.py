@@ -175,7 +175,11 @@ def main():
         loader, dataset = get_loader(img_size, config.DATASET)  # 4->0, 8->1, 16->2, 32->3, 64 -> 4
         val_loader, val_dataset = get_loader(img_size,
                                              config.VALIDATION_DATASET)  # 4->0, 8->1, 16->2, 32->3, 64 -> 4
+
         print(f"Current image size: {img_size}")
+        gen_total_params = sum(p.numel() for p in gen.parameters() if p.requires_grad)
+        critic_total_params = sum(p.numel() for p in critic.parameters() if p.requires_grad)
+        print(f"Number of parameters. Gen: {gen_total_params}, Critic: {critic_total_params}")
 
         for epoch in range(n_epochs):
             print(f"Epoch [{epoch + 1}/{n_epochs}]")
