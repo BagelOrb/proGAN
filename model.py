@@ -14,10 +14,11 @@ class SOMConv2d(nn.Module):
     """Convolution layer which splits and distributes channels
     """
 
-    def __init__(self, n_in_channels, n_out_channels, som_kernel_size=None, kernel_size=3, stride=1, padding=1, gain=2,
-                 dilation=(1, 1)):
+    def __init__(self, n_in_channels, n_out_channels, som_size=4, som_kernel_size=3, kernel_size=3, stride=1, padding=1,
+                 gain=2, dilation=(1, 1)):
         super(SOMConv2d, self).__init__()
 
+        self.n_out_channels = n_out_channels
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
@@ -33,68 +34,70 @@ class SOMConv2d(nn.Module):
             nn.init.zeros_(self.conv.bias)
             return
 
-        if False:
-            self.som_size = 2 ** math.floor(
-                math.log2(math.floor(math.sqrt(n_in_channels))))  # the shorter side of the grid
-            # TODO: maybe use square grid of size other than powers of 2?
+        self.som_size = som_size  # TODO: check implementation that input channels are always divided into a 4x4 SOM
+        self.som_kernel_size = som_kernel_size
 
-            if som_kernel_size is None:
-                som_kernel_size = int(self.som_size * 4 / 5)
-                if som_kernel_size >= self.som_size: som_kernel_size = self.som_size - 1  # at least try to reduce kernel
-                if som_kernel_size < 2: som_kernel_size = 2  # Never only use a single channel
+        self.som_in_depth = int(n_in_channels / som_size / som_size)
+        self.som_out_depth = int(n_out_channels / som_size / som_size)
 
-        self.som_size = 4  # TODO: check implementation that input channels are always divided into a 4x4 SOM
-        som_kernel_size = 3
-
-        self.som_y_stride = 2 ** math.floor(math.log2(math.floor(n_in_channels / self.som_size / self.som_size)))
-
-        total_som_size = int(n_out_channels / self.som_y_stride)
+        in_indices_in_som_grid = torch.tensor(range(n_in_channels), dtype=torch.long).reshape(som_size, som_size, -1)
+        assert (self.som_in_depth == in_indices_in_som_grid.shape[2])
 
         self.conv_layers = nn.ModuleList()
-        for i in range(total_som_size):
+        for i in range(som_size * som_size):
             self.conv_layers.append(
-                nn.Conv2d(som_kernel_size ** 2 * self.som_y_stride, self.som_y_stride, kernel_size=kernel_size, stride=stride,
+                nn.Conv2d(som_kernel_size ** 2 * self.som_in_depth, self.som_out_depth, kernel_size=kernel_size,
+                          stride=stride,
                           padding=padding,
                           dilation=dilation))
+
+        for conv_layer in self.conv_layers:
             # initialize conv layer
-            nn.init.normal_(self.conv_layers[-1].weight)
-            nn.init.zeros_(self.conv_layers[-1].bias)
+            nn.init.normal_(conv_layer.weight)
+            nn.init.zeros_(conv_layer.bias)
 
-        self.in_channel_indices_all = []
+        self.in_channel_indices_per_som_cell = torch.zeros(
+            (som_size ** 2, self.som_in_depth * som_kernel_size ** 2),
+            dtype=torch.long, device=config.DEVICE)
 
-        for c in range(total_som_size):
-            som_c = int(c / total_som_size * n_in_channels)
-            som_x = som_c % self.som_size
-            som_y = math.floor(som_c / self.som_size)
-            if False and n_out_channels == n_in_channels / 2:  # TODO
-                if som_y % 2 == 1:
-                    som_x += 1
-
-            in_channel_indices = []
-            for (x_offset, y_offset) in np.ndindex(som_kernel_size, som_kernel_size):
-                x = (som_x + x_offset) % self.som_size
-                y = (som_y + y_offset) % int(total_som_size / self.som_size)  # TODO: just make som_size_x and som_size_y
-                idx = y * self.som_size + x
-                assert (0 <= idx < total_som_size)
-                in_channel_indices += range(idx * self.som_y_stride, (idx + 1) * self.som_y_stride)
-
-            self.in_channel_indices_all.append(in_channel_indices)
+        i_som_cell = 0
+        for som_x, som_y in np.ndindex(som_size, som_size):
+            # in_channel_indices = []
+            # for (x_offset, y_offset) in np.ndindex(som_kernel_size, som_kernel_size):
+            #     x = (som_x + x_offset) % self.som_size
+            #     y = (som_y + y_offset) % self.som_size
+            #     in_channel_indices += in_indices_in_som_grid[x, y, :]
+            #
+            # self.in_channel_indices_per_som_cell[i_som_cell, :] = torch.tensor(in_channel_indices)
+            self.in_channel_indices_per_som_cell[i_som_cell, :] = in_indices_in_som_grid[np.ix_(
+                range(som_x - som_kernel_size, som_x),
+                range(som_y - som_kernel_size, som_y),
+                range(0, in_indices_in_som_grid.shape[2]))].reshape(-1)
+            i_som_cell += 1
+        # TODO: sort indices?
 
     def forward(self, x):
         if self.collapsed_case:
             return self.conv(x * self.scale)
 
         out_shape = (  # from https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html
-            x.shape[0], len(self.conv_layers) * self.som_y_stride,
+            x.shape[0], len(self.conv_layers) * self.som_in_depth,
             int(math.floor(
                 (x.shape[2] + 2 * self.padding - self.dilation[0] * (self.kernel_size - 1)) / self.stride)),
             int(math.floor(
                 (x.shape[3] + 2 * self.padding - self.dilation[1] * (self.kernel_size - 1)) / self.stride))
         )
         out = torch.zeros(out_shape, dtype=x.dtype, device=x.device)
+        outs = []
+        assert(self.som_out_depth * len(self.conv_layers) == self.n_out_channels)
         for i, conv in enumerate(self.conv_layers):
-            out[:, i * self.som_y_stride:(i + 1) * self.som_y_stride, :, :] = conv(
-                x[:, self.in_channel_indices_all[i], :, :] * self.scale)
+            outs.append(
+                # conv(x * self.scale)
+                conv(x[:, self.in_channel_indices_per_som_cell[i], :, :] * self.scale)
+            )
+            # out[:, i * self.som_out_depth: (i + 1) * self.som_out_depth, :, :] = \
+        out = torch.stack(outs).transpose(0, 1).flatten(start_dim=1, end_dim=2)
+        assert(out.shape == out_shape)
         return out
 
 
