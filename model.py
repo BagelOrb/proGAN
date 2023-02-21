@@ -3,10 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import numpy as np
+import config
 from math import log2
 
-#          4  8 16 32  64     128    256    512     1024
-factors = [1, 1, 1, 1, 1 / 2, 1 / 4, 1 / 8, 1 / 16, 1 / 32]
+# img size                            4    8    16   32   64  128 256 512  1024
+n_channels_per_block = torch.tensor([512, 512, 512, 512, 256, 128, 64, 32, 16]) * config.IN_CHANNELS / 512
 
 
 class SOMConv2d(nn.Module):
@@ -151,8 +152,9 @@ class ConvBlock(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, z_dim, in_channels, img_channels=3):
+    def __init__(self, z_dim, img_channels=3):
         super().__init__()
+        in_channels = int(n_channels_per_block[0])
         self.initial = nn.Sequential(
             PixelNorm(),
             nn.ConvTranspose2d(z_dim, in_channels, 4, 1, 0),  # 1x1 -> 4x4 (kernel_size, stride, padding)
@@ -170,9 +172,9 @@ class Generator(nn.Module):
         )
         # TODO: split rgb_layers into two: one for upscaled and one for upscaled+convoluted
 
-        for i in range(len(factors) - 1):
-            conv_in_channels = int(in_channels * factors[i])
-            conv_out_channels = int(in_channels * factors[i + 1])
+        for i in range(len(n_channels_per_block) - 1):
+            conv_in_channels = int(n_channels_per_block[i])
+            conv_out_channels = int(n_channels_per_block[i + 1])
             self.prog_blocks.append(ConvBlock(conv_in_channels, conv_out_channels))
             self.to_rgb_layers.append(WSConv2d(conv_out_channels, img_channels, kernel_size=1, padding=0))
 
@@ -197,14 +199,15 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, in_channels, img_channels=3):
+    def __init__(self, img_channels=3):
         super(Discriminator, self).__init__()
         self.prog_blocks, self.from_rgb_layers = nn.ModuleList(), nn.ModuleList()
         self.leaky = nn.LeakyReLU(0.2)
 
-        for i in range(len(factors) - 1, 0, -1):  # (excluding zero)
-            conv_in_channels = int(in_channels * factors[i])
-            conv_out_channels = int(in_channels * factors[i - 1])
+        in_channels = int(n_channels_per_block[0])
+        for i in range(len(n_channels_per_block) - 1, 0, -1):  # (excluding zero)
+            conv_in_channels = int(n_channels_per_block[i])
+            conv_out_channels = int(n_channels_per_block[i - 1])
             self.prog_blocks.append(ConvBlock(conv_in_channels, conv_out_channels, use_pixel_norm=False))
             self.from_rgb_layers.append(WSConv2d(img_channels, conv_in_channels, kernel_size=1, padding=0))
 
@@ -256,13 +259,21 @@ class Discriminator(nn.Module):
 if __name__ == "__main__":
     Z_DIM = 50
     IN_CHANNELS = 256
-    gen = Generator(Z_DIM, IN_CHANNELS, img_channels=3)
-    critic = Discriminator(IN_CHANNELS, img_channels=3)
+    gen = Generator(Z_DIM, img_channels=3).to(config.DEVICE)
+    critic = Discriminator(img_channels=3).to(config.DEVICE)
+    gen_total_params = sum(p.numel() for p in gen.parameters() if p.requires_grad)
+    critic_total_params = sum(p.numel() for p in critic.parameters() if p.requires_grad)
+    print(f"Number of parameters. Gen: {gen_total_params/1000000:.2f}M, Critic: {critic_total_params/1000000:.2f}M")
+    print(f"Used memory: {torch.cuda.memory_allocated() / (1024**2):.1f}MB")
 
     for num_blocks in range(9):
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
         img_size = 2 ** (num_blocks + 2)
-        x = torch.randn((1, Z_DIM, 1, 1))
+        x = torch.randn((1, Z_DIM, 1, 1)).to(config.DEVICE)
+        print(f"Used memory: {torch.cuda.memory_allocated() / (1024**2):.1f}MB")
         z = gen(x, .5, n_blocks=num_blocks)
+        print(f"Used memory: {torch.cuda.memory_allocated() / (1024**2):.1f}MB")
         assert z.shape == (1, 3, img_size, img_size)
         out = critic(z, alpha=.5, n_blocks=num_blocks)
         assert out.shape == (1, 1)

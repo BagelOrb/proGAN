@@ -156,10 +156,10 @@ def main():
     # according to WGAN paper (since it no longer outputs between [0, 1])
     # but really who cares..
     gen = Generator(
-        config.Z_DIM, config.IN_CHANNELS, img_channels=config.CHANNELS_IMG
+        config.Z_DIM, img_channels=config.CHANNELS_IMG
     ).to(config.DEVICE)
     critic = Discriminator(
-        config.IN_CHANNELS, img_channels=config.CHANNELS_IMG
+        img_channels=config.CHANNELS_IMG
     ).to(config.DEVICE)
 
     # initialize optimizers and scalers for FP16 training
