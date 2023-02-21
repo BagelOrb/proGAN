@@ -38,7 +38,7 @@ class SOMConv2d(nn.Module):
             nn.init.zeros_(self.conv.bias)
             return
 
-        self.som_size = som_size  # TODO: check implementation that input channels are always divided into a 4x4 SOM
+        self.som_size = som_size
         self.som_kernel_size = som_kernel_size
 
         self.som_in_depth = int(n_in_channels / som_size / som_size)
@@ -66,19 +66,12 @@ class SOMConv2d(nn.Module):
 
         i_som_cell = 0
         for som_x, som_y in np.ndindex(som_size, som_size):
-            # in_channel_indices = []
-            # for (x_offset, y_offset) in np.ndindex(som_kernel_size, som_kernel_size):
-            #     x = (som_x + x_offset) % self.som_size
-            #     y = (som_y + y_offset) % self.som_size
-            #     in_channel_indices += in_indices_in_som_grid[x, y, :]
-            #
-            # self.in_channel_indices_per_som_cell[i_som_cell, :] = torch.tensor(in_channel_indices)
             self.in_channel_indices_per_som_cell[i_som_cell, :] = in_indices_in_som_grid[np.ix_(
                 range(som_x - som_kernel_size, som_x),
                 range(som_y - som_kernel_size, som_y),
                 range(0, in_indices_in_som_grid.shape[2]))].reshape(-1)
             i_som_cell += 1
-        # TODO: sort indices?
+        self.in_channel_indices_per_som_cell, _ = self.in_channel_indices_per_som_cell.sort()
 
     def forward(self, x):
         if self.collapsed_case:
