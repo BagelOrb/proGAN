@@ -30,7 +30,7 @@ def plot_to_tensorboard(
 
 def cooldown():
     safety_factor = .95
-    cooling_factor = .80
+    cooling_factor = .90
     max_gpu_temp = 93
     safe = True
     cooling_causes = []
