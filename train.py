@@ -108,28 +108,10 @@ def train_fn(
         if batch_idx % 240 == 0:
             with torch.no_grad():
                 fixed_fakes = gen(config.FIXED_NOISE, alpha, step) * 0.5 + 0.5
-            batch_accuracies_real = []
-            batch_accuracies_fake = []
-            for (val_real, _) in val_loader:
-                cur_val_batch_size = val_real.shape[0]
-                noise = torch.randn(cur_val_batch_size, config.Z_DIM, 1, 1).to(config.DEVICE)
-                # with torch.cuda.amp.autocast(): # TODO idk if this should be commented out or not
-                with torch.no_grad():
-                    fake = gen(noise, alpha, step)
-
-                    critic_real = critic(real, alpha, step)
-                    critic_fake = critic(fake.detach(), alpha, step)
-                    batch_accuracies_real.append(((critic_real > 0).type(torch.float)).mean())
-                    batch_accuracies_fake.append(((critic_fake < 0).type(torch.float)).mean())
-
-            accuracy_real = torch.Tensor(batch_accuracies_real).mean()
-            accuracy_fake = torch.Tensor(batch_accuracies_fake).mean()
             plot_to_tensorboard(
                 writer,
                 loss_critic.item(),
                 loss_gen.item(),
-                accuracy_real,
-                accuracy_fake,
                 alpha,
                 real.detach(),
                 fixed_fakes.detach(),

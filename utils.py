@@ -14,12 +14,10 @@ import time
 
 # Print losses occasionally and print to tensorboard
 def plot_to_tensorboard(
-        writer, loss_critic, loss_gen, accuracy_real, accuracy_fake, alpha, real, fake, tensorboard_step
+        writer, loss_critic, loss_gen, alpha, real, fake, tensorboard_step
 ):
     writer.add_scalar("Loss Critic", loss_critic, global_step=tensorboard_step)
     writer.add_scalar("Loss Generator", loss_gen, global_step=tensorboard_step)
-    writer.add_scalar("Accuracy real", accuracy_real, global_step=tensorboard_step)
-    writer.add_scalar("Accuracy fake", accuracy_fake, global_step=tensorboard_step)
     writer.add_scalar("alpha", alpha, global_step=tensorboard_step)
 
     with torch.no_grad():
