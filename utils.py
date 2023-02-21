@@ -91,7 +91,7 @@ def save_checkpoint(model, optimizer, img_size, filename_prefix="my_checkpoint")
 
 def load_checkpoint(filename_prefix, model, optimizer, lr):
     print("=> Loading checkpoint")
-    checkpoint = torch.load(filename_prefix + str(config.START_TRAIN_AT_IMG_SIZE) + ".pth", map_location="cuda")
+    checkpoint = torch.load(filename_prefix + str(config.START_TRAIN_AT_IMG_SIZE // (1+config.START_ONE_BELOW)) + ".pth", map_location="cuda")
     model.load_state_dict(checkpoint["state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer"])
 

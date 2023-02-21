@@ -2,6 +2,7 @@ import torch
 from math import log2
 
 START_TRAIN_AT_IMG_SIZE = 32
+START_ONE_BELOW = 0  # 0 or 1
 DATASET = 'celeba_hq/train'  # FIXME: only use training data
 VALIDATION_DATASET = 'celeba_hq/val'  # FIXME: only use training data
 CHECKPOINT_GEN = "generator"
