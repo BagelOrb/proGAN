@@ -78,23 +78,23 @@ class SOMConv2d(nn.Module):
             return self.conv(x * self.scale)
 
         out_shape = (  # from https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html
-            x.shape[0], len(self.conv_layers) * self.som_in_depth,
+            x.shape[0], len(self.conv_layers) * self.som_out_depth,
             int(math.floor(
                 (x.shape[2] + 2 * self.padding - self.dilation[0] * (self.kernel_size - 1)) / self.stride)),
             int(math.floor(
                 (x.shape[3] + 2 * self.padding - self.dilation[1] * (self.kernel_size - 1)) / self.stride))
         )
-        out = torch.zeros(out_shape, dtype=x.dtype, device=x.device)
-        outs = []
+        # out = torch.zeros(out_shape, dtype=x.dtype, device=x.device)
+        outs = []  # TODO: less GPU memory, but more computation on CPU?
         assert(self.som_out_depth * len(self.conv_layers) == self.n_out_channels)
         for i, conv in enumerate(self.conv_layers):
+            # out[:, i * self.som_out_depth: (i + 1) * self.som_out_depth, :, :] = (
             outs.append(
-                # conv(x * self.scale)
+            #     conv(x * self.scale)
                 conv(x[:, self.in_channel_indices_per_som_cell[i], :, :] * self.scale)
             )
-            # out[:, i * self.som_out_depth: (i + 1) * self.som_out_depth, :, :] = \
+        # merge dim 0 (som stack) and 2(channels), but leave dim 1(batch) and 3,4(pixels)
         out = torch.stack(outs).transpose(0, 1).flatten(start_dim=1, end_dim=2)
-        assert(out.shape == out_shape)
         return out
 
 
