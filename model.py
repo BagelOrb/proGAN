@@ -47,6 +47,11 @@ class SOMConv2d(nn.Module):
         in_indices_in_som_grid = torch.tensor(range(n_in_channels), dtype=torch.long).reshape(som_size, som_size, -1)
         assert (self.som_in_depth == in_indices_in_som_grid.shape[2])
 
+        # TODO: instead of having 16 separate layers, we can have one Conv2d layer with groups,
+        #  but with input channels replicated in a smart manner.
+        #  Or several Conv2d layers with 2 groups
+        #  Maybe just 2 layers with 2 groups. And put the first quarter of channels to the back for the second layer
+
         self.conv_layers = nn.ModuleList()
         for i in range(som_size * som_size):
             self.conv_layers.append(
@@ -86,11 +91,11 @@ class SOMConv2d(nn.Module):
         )
         # out = torch.zeros(out_shape, dtype=x.dtype, device=x.device)
         outs = []  # TODO: less GPU memory, but more computation on CPU?
-        assert(self.som_out_depth * len(self.conv_layers) == self.n_out_channels)
+        assert (self.som_out_depth * len(self.conv_layers) == self.n_out_channels)
         for i, conv in enumerate(self.conv_layers):
             # out[:, i * self.som_out_depth: (i + 1) * self.som_out_depth, :, :] = (
             outs.append(
-            #     conv(x * self.scale)
+                #     conv(x * self.scale)
                 conv(x[:, self.in_channel_indices_per_som_cell[i], :, :] * self.scale)
             )
         # merge dim 0 (som stack) and 2(channels), but leave dim 1(batch) and 3,4(pixels)
@@ -261,17 +266,17 @@ if __name__ == "__main__":
     critic = Discriminator(img_channels=3).to(config.DEVICE)
     gen_total_params = sum(p.numel() for p in gen.parameters() if p.requires_grad)
     critic_total_params = sum(p.numel() for p in critic.parameters() if p.requires_grad)
-    print(f"Number of parameters. Gen: {gen_total_params/1000000:.2f}M, Critic: {critic_total_params/1000000:.2f}M")
-    print(f"Used memory: {torch.cuda.memory_allocated() / (1024**2):.1f}MB")
+    print(f"Number of parameters. Gen: {gen_total_params / 1000000:.2f}M, Critic: {critic_total_params / 1000000:.2f}M")
+    print(f"Used memory: {torch.cuda.memory_allocated() / (1024 ** 2):.1f}MB")
 
     for num_blocks in range(9):
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
         img_size = 2 ** (num_blocks + 2)
         x = torch.randn((1, Z_DIM, 1, 1)).to(config.DEVICE)
-        print(f"Used memory: {torch.cuda.memory_allocated() / (1024**2):.1f}MB")
+        print(f"Used memory: {torch.cuda.memory_allocated() / (1024 ** 2):.1f}MB")
         z = gen(x, .5, n_blocks=num_blocks)
-        print(f"Used memory: {torch.cuda.memory_allocated() / (1024**2):.1f}MB")
+        print(f"Used memory: {torch.cuda.memory_allocated() / (1024 ** 2):.1f}MB")
         assert z.shape == (1, 3, img_size, img_size)
         final_out = critic(z, alpha=.5, n_blocks=num_blocks)
         assert final_out.shape == (1, 1)
