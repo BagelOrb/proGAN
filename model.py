@@ -103,6 +103,61 @@ class SOMConv2d(nn.Module):
         return out
 
 
+class QuadConv2d(nn.Module):
+    """Convolution layer which splits and distributes channels
+    """
+
+    def __init__(self, n_in_channels, n_out_channels, kernel_size=3, stride=1, padding=1,
+                 gain=2, dilation=(1, 1)):
+        super(QuadConv2d, self).__init__()
+
+        self.n_out_channels = n_out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.dilation = dilation
+
+        self.scale = (gain / (n_in_channels * kernel_size * kernel_size)) ** 0.5
+
+        self.collapsed_case = False
+        if n_out_channels < 16 or n_in_channels < 16 \
+                or n_in_channels % 2 != 0 \
+                or n_out_channels % 2 != 0 \
+                or kernel_size < 2:
+            # TODO: deal with odd numbers of layers, such as the final layer with minibatch std dev!
+            self.collapsed_case = True
+            self.conv = nn.Conv2d(n_in_channels, n_out_channels, kernel_size, stride, padding)
+            nn.init.normal_(self.conv.weight)
+            nn.init.zeros_(self.conv.bias)
+            return
+
+        self.conv1 = nn.Conv2d(n_in_channels, n_out_channels // 2, kernel_size=kernel_size,
+                               stride=stride,
+                               padding=padding,
+                               dilation=dilation,
+                               groups=2)
+        self.conv2 = nn.Conv2d(n_in_channels, n_out_channels // 2, kernel_size=kernel_size,
+                               stride=stride,
+                               padding=padding,
+                               dilation=dilation,
+                               groups=2)
+        for conv_layer in [self.conv1, self.conv2]:
+            # initialize conv layer
+            nn.init.normal_(conv_layer.weight)
+            nn.init.zeros_(conv_layer.bias)
+
+    def forward(self, y):
+        x = y * self.scale
+        if self.collapsed_case:
+            return self.conv(x)
+
+        res1 = self.conv1(x)
+        split = x.shape[1] // 4
+        x = torch.cat([x[:, split:x.shape[1], :, :], x[:, 0:split, :, :]], dim=1)
+        res2 = self.conv2(x)
+        return torch.cat([res1, res2], dim=1)
+
+
 class WSConv2d_old(nn.Module):
     """Weight scaled convolution
     """
@@ -120,7 +175,6 @@ class WSConv2d_old(nn.Module):
 
     def forward(self, x):
         return self.conv(x * self.scale) + self.bias.view(1, self.bias.shape[0], 1, 1)
-
 
 
 class PixelNorm(nn.Module):
@@ -257,6 +311,7 @@ class Discriminator(nn.Module):
 
 
 WSConv2d = SOMConv2d
+WSConv2d = QuadConv2d
 # WSConv2d = WSConv2d_old
 
 if __name__ == "__main__":
